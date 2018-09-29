@@ -23,13 +23,6 @@ function gcal_help($path, $arg) {
 }
 
 /**
- * Implements hook_libraries_info_alter().
- */
-function gcal_libraries_info_alter(&$libraries) {
-  $libraries['google-api-php-client']['files']['php'][] = 'src/Google/Service/Calendar.php';
-}
-
-/**
  * Returns Array of calendar attributes and google library functions.
  */
 function gcal_calendar_attributes() {
@@ -238,7 +231,7 @@ function gcal_calendar_create($calendar, $account_id, $by_name = TRUE, $service_
   }
   $attributes = gcal_calendar_attributes();
   unset($attributes['Id']);
-  $cal = new Google_Calendar();
+  $cal = new Google_Service_Calendar_Calendar();
   // Clean array before passing it if user has passed any unwanted indexes.
   $calendar = array_intersect_key($calendar, $attributes);
   foreach ($calendar as $attr => $val) {
@@ -282,7 +275,7 @@ function gcal_calendar_update($calendar, $account_id, $by_name = TRUE, $service_
   if (!$gcs) {
     return FALSE;
   }
-  $cal = new Google_Calendar();
+  $cal = new Google_Service_Calendar_Calendar();
   $attributes = gcal_calendar_attributes();
   // Clean array before passing it if user has passed any unwanted indexes.
   $calendar = array_intersect_key($calendar, $attributes);
@@ -686,7 +679,7 @@ function gcal_event_update($event, $calendar_id, $account_id, $by_name = TRUE, $
     $start = $event['Start'];
     $timestamp = strtotime($start);
     $start = date('Y-m-d\TH:i:s', $timestamp);
-    $event['Start'] = new Google_EventDateTime();
+    $event['Start'] = new Google_Service_Calendar_EventDateTime();
     $event['Start']->setDateTime($start);
     $event['Start']->setTimeZone($event['Timezone']);
   }
@@ -694,13 +687,13 @@ function gcal_event_update($event, $calendar_id, $account_id, $by_name = TRUE, $
     $end = $event['End'];
     $timestamp = strtotime($end);
     $end = date('Y-m-d\TH:i:s', $timestamp);
-    $event['End'] = new Google_EventDateTime();
+    $event['End'] = new Google_Service_Calendar_EventDateTime();
     $event['End']->setDateTime($end);
     $event['End']->setTimeZone($event['Timezone']);
   }
   if (isset($event['OriginalStartTime'])) {
     $timestamp = strtotime($event['OriginalStartTime']);
-    $event['OriginalStartTime'] = new Google_EventDateTime();
+    $event['OriginalStartTime'] = new Google_Service_Calendar_EventDateTime();
     $event['OriginalStartTime']->setDateTime(date('Y-m-d\TH:i:s', $timestamp));
     $event['OriginalStartTime']->setTimeZone($event['Timezone']);
   }
@@ -708,18 +701,18 @@ function gcal_event_update($event, $calendar_id, $account_id, $by_name = TRUE, $
     $google_reminder = array();
     foreach ($event['Reminders'] as $key => $reminder) {
       if (isset($reminder['minutes'])) {
-        $google_reminder[$key] = new Google_EventReminder();
+        $google_reminder[$key] = new Google_Service_Calendar_EventReminders();
         $google_reminder[$key]->setMinutes($reminder['minutes']);
         $google_reminder[$key]->setMethod(isset($reminder['method']) ? $reminder['method'] : 'email');
       }
     }
-    $event['Reminders'] = new Google_EventReminders();
+    $event['Reminders'] = new Google_Service_Calendar_EventReminders();
     $event['Reminders']->setOverrides($google_reminder);
     $event['Reminders']->setUseDefault(FALSE);
   }
   if (isset($event['Creator'])) {
     $creator = $event['Creator'];
-    $event['Creator'] = new Google_EventCreator();
+    $event['Creator'] = new Google_Service_Calendar_EventCreator();
     if (isset($creator['Creator']['DisplayName'])) {
       $event['Creator']->setDisplayName($creator['DisplayName']);
     }
@@ -761,7 +754,7 @@ function gcal_event_update($event, $calendar_id, $account_id, $by_name = TRUE, $
       }
       else {
         $attendee = array_intersect_key($attendee, $attributes);
-        $event_attendee = new Google_EventAttendee();
+        $event_attendee = new Google_Service_Calendar_EventAttendee();
         foreach ($attendee as $key => $val) {
           $event_attendee->$attributes[$key]($val);
         }
@@ -941,13 +934,13 @@ function gcal_freebusy($params, $account_id, $by_name = TRUE, $service_account =
   $params['TimeMin'] = $start;
   $params['TimeMax'] = $end;
   foreach ($params['Items'] as $key => $val) {
-    $params['Items'][$key] = new Google_FreeBusyRequestItem();
+    $params['Items'][$key] = new Google_Service_Calendar_FreeBusyRequestItem();
     $params['Items'][$key]->setId($val);
   }
   $attributes = gcal_freebusy_attributes();
   // Clean array before passing it if user has passed any unwanted indexes.
   $params = array_intersect_key($params, $attributes);
-  $freebusy = new Google_FreeBusyRequest();
+  $freebusy = new Google_Service_Calendar_FreeBusyRequest();
   foreach ($params as $attr => $val) {
     $freebusy->$attributes[$attr]($val);
   }
@@ -1005,7 +998,7 @@ function gcal_acl_create($acl, $calendar_id, $account_id, $by_name = TRUE, $serv
     drupal_set_message(t("Invalid scopeType passed to the acl create function"), 'error');
     return FALSE;
   }
-  $scope = new Google_AclRuleScope();
+  $scope = new Google_Service_Calendar_AclRuleScope();
   $scope->setType($acl['scopeType']);
   if ($acl['scopeType'] != 'default' && !isset($acl['scopeValue'])) {
     drupal_set_message(t("No scopeValue passed to the acl create function"), 'error');
@@ -1017,7 +1010,7 @@ function gcal_acl_create($acl, $calendar_id, $account_id, $by_name = TRUE, $serv
   else {
     $scope->setValue("");
   }
-  $rule = new Google_AclRule();
+  $rule = new Google_Service_Calendar_AclRule();
   $rule->setScope($scope);
   if (isset($acl['role'])) {
     if (!in_array($acl['role'],
@@ -1136,12 +1129,12 @@ function gcal_calendarList_create($calendarlist, $account_id, $by_name = TRUE, $
   if (!$gcs) {
     return FALSE;
   }
-  $cal = new Google_CalendarListEntry();
+  $cal = new Google_Service_Calendar_CalendarListEntry();
   if (isset($calendarlist['DefaultReminders'])) {
     $google_reminder = array();
     foreach ($calendarlist['DefaultReminders'] as $key => $reminder) {
       if (isset($reminder['minutes'])) {
-        $google_reminder[$key] = new Google_EventReminder();
+        $google_reminder[$key] = new Google_Service_Calendar_EventReminder();
         $google_reminder[$key]->setMinutes($reminder['minutes']);
         $google_reminder[$key]->setMethod(isset($reminder['method']) ? $reminder['method'] : 'email');
       }
@@ -1219,7 +1212,7 @@ function gcal_calendarlist_update($calendarlist, $account_id, $by_name = TRUE, $
     $reminders = $cal->getDefaultReminders();
     foreach ($calendarlist['DefaultReminders'] as $key => $reminder) {
       if (isset($reminder['minutes'])) {
-        $google_reminder = new Google_EventReminder();
+        $google_reminder = new Google_Service_Calendar_EventReminder();
         $google_reminder->setMinutes($reminder['minutes']);
         $google_reminder->setMethod(isset($reminder['method']) ? $reminder['method'] : 'email');
         array_push($reminders, $google_reminder);
