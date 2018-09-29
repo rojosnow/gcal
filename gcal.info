@@ -4,9 +4,9 @@ package = Google Api
 core = 7.x
 
 dependencies[] = gauth
-; Information added by drupal.org packaging script on 2013-02-28
-version = "7.x-1.0-rc1"
+; Information added by Drupal.org packaging script on 2016-07-31
+version = "7.x-1.0-rc2"
 core = "7.x"
 project = "gcal"
-datestamp = "1362058348"
+datestamp = "1469975640"
 

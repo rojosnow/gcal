@@ -1,0 +1,501 @@
+diff --git a/gcal.module b/gcal.module
+old mode 100755
+new mode 100644
+index 461ceab..b33d583
+--- a/gcal.module
++++ b/gcal.module
+@@ -22,13 +22,6 @@ function gcal_help($path, $arg) {
+   }
+ }
+ 
+-/**
+- * Implements hook_libraries_info_alter().
+- */
+-function gcal_libraries_info_alter(&$libraries) {
+-  $libraries['google-api-php-client']['files']['php'][] = 'src/Google/Service/Calendar.php';
+-}
+-
+ /**
+  * Returns Array of calendar attributes and google library functions.
+  */
+@@ -148,53 +141,19 @@ function gcal_freebusy_attributes() {
+ }
+ 
+ /**
+- * Returns a Object of Google_Service_Calendar from the Google API.
+- *
+- * @param string $account_id
+- *   Name or id of the account which will be used to create Google_Client.
+- *  Can also be passed an array with all Account parameters.
+- * @param bool $by_name
+- *   Set FALSE if passing account id and TRUE for account name.
+- * @param array $service_account
+- *   This should include the following keys:
+- *   - 'enabled' => TRUE
+- *   - 'guser' => 'GOOGLE USER ACCOUNT' (typically an email address) | FALSE
+- * @return bool|\Google_Service_Calendar
++ * Returns a Object of Google_CalendarService from google library.
+  */
+-function gcal_calendar_object($account_id, $by_name = TRUE, $service_account = array()) {
++function gcal_calendar_object($account_id, $by_name = TRUE) {
+   $info = libraries_load("google-api-php-client");
+   if (!$info['loaded']) {
+-    drupal_set_message(t('The Google API PHP library is missing. The Google_Client was not loaded.'), 'error');
+-    watchdog('gcal', t('The Google API PHP library is missing. The Google_Client was not loaded.'), 'error');
++    drupal_set_message(t("Can't perform any operation as library is missing check Status report or Readme for requirements"), 'error');
+     return FALSE;
+   }
+-
+-  // How should we create the Google_Client: Service Account or Web Application?
+-  if (!empty($service_account) && !empty($service_account['enabled'])) {
+-    // Get the Google_Client via a Service Account.
+-    if (!module_exists('gauth_service_account')) {
+-      // Requested a Service Account but module doesn't exist or isn't enabled.
+-      drupal_set_message(t('A Service Account was requested. The gauth_service_account module isn\'t enabled.'), 'error');
+-      watchdog('gcal', t('A Service Account was requested. The gauth_service_account module isn\'t enabled.'), WATCHDOG_ERROR);
+-      return FALSE;
+-    }
+-
+-    // Set the guser to FALSE if not present or empty.
+-    $guser = !empty($service_account['guser']) ? $service_account['guser'] : FALSE;
+-
+-    $google_client = gauth_service_account_client_get($account_id, $by_name, $guser);
+-  }
+-  else {
+-    // Get the Google_Client via a Web Application.
+-    $google_client = gauth_client_get($account_id, $by_name);
+-  }
+-
++  $google_client = gauth_client_get($account_id, $by_name);
+   if (!$google_client) {
+-    drupal_set_message(t('Unable to create a Google_Client object.'), 'error');
+-    watchdog('gcal', t('Unable to create a Google_Client object.'), 'error');
++    drupal_set_message(t("Can't create google client object, account is Invalid"), 'error');
+     return FALSE;
+   }
+-
+   return new Google_Service_Calendar($google_client);
+ }
+ 
+@@ -223,7 +182,7 @@ function gcal_calendar_object($account_id, $by_name = TRUE, $service_account = a
+  *   kind - Kind (usually calendar)
+  *   summary - Summary set for the calendar
+  */
+-function gcal_calendar_create($calendar, $account_id, $by_name = TRUE, $service_account = array()) {
++function gcal_calendar_create($calendar, $account_id, $by_name = TRUE) {
+   if (!is_array($calendar)) {
+     drupal_set_message(t("Please pass array of attributes to create function"));
+     return FALSE;
+@@ -232,13 +191,13 @@ function gcal_calendar_create($calendar, $account_id, $by_name = TRUE, $service_
+     drupal_set_message(t("Please set the summary for the calendar"), 'error');
+     return FALSE;
+   }
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+   $attributes = gcal_calendar_attributes();
+   unset($attributes['Id']);
+-  $cal = new Google_Calendar();
++  $cal = new Google_Service_Calendar_Calendar();
+   // Clean array before passing it if user has passed any unwanted indexes.
+   $calendar = array_intersect_key($calendar, $attributes);
+   foreach ($calendar as $attr => $val) {
+@@ -269,7 +228,7 @@ function gcal_calendar_create($calendar, $account_id, $by_name = TRUE, $service_
+  *   kind - Kind (usually calendar)
+  *   summary - Summary set for the calendar
+  */
+-function gcal_calendar_update($calendar, $account_id, $by_name = TRUE, $service_account = array()) {
++function gcal_calendar_update($calendar, $account_id, $by_name = TRUE) {
+   if (!is_array($calendar)) {
+     drupal_set_message(t("Please pass array of attributes to update function"));
+     return FALSE;
+@@ -278,11 +237,11 @@ function gcal_calendar_update($calendar, $account_id, $by_name = TRUE, $service_
+     drupal_set_message(t("Please set the id for the calendar"), 'error');
+     return FALSE;
+   }
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+-  $cal = new Google_Calendar();
++  $cal = new Google_Service_Calendar_Calendar();
+   $attributes = gcal_calendar_attributes();
+   // Clean array before passing it if user has passed any unwanted indexes.
+   $calendar = array_intersect_key($calendar, $attributes);
+@@ -308,8 +267,8 @@ function gcal_calendar_update($calendar, $account_id, $by_name = TRUE, $service_
+  * @param string $account_id
+  *   Name or id of google_oauth2 account
+  */
+-function gcal_calendar_delete($calendar_id, $account_id, $by_name = TRUE, $service_account = array()) {
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++function gcal_calendar_delete($calendar_id, $account_id, $by_name = TRUE) {
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+@@ -328,8 +287,8 @@ function gcal_calendar_delete($calendar_id, $account_id, $by_name = TRUE, $servi
+  * @return array
+  *   Array of calendar attributes as kind, etag, id, summary(title), timeZone.
+  */
+-function gcal_calendar_get($calendar_id, $account_id, $by_name = TRUE, $service_account = array()) {
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++function gcal_calendar_get($calendar_id, $account_id, $by_name = TRUE) {
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+@@ -389,8 +348,8 @@ function gcal_calendar_private($calendar_id, $account_id, $by_name = TRUE) {
+  *   id - setting name
+  *   value - value of the setting
+  */
+-function gcal_setting_get($setting, $account_id, $by_name = TRUE, $service_account = array()) {
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++function gcal_setting_get($setting, $account_id, $by_name = TRUE) {
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+@@ -416,8 +375,8 @@ function gcal_setting_get($setting, $account_id, $by_name = TRUE, $service_accou
+  *   id - setting name
+  *   value - value of the setting
+  */
+-function gcal_setting_list($account_id, $by_name = TRUE, $service_account = array()) {
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++function gcal_setting_list($account_id, $by_name = TRUE) {
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+@@ -439,8 +398,8 @@ function gcal_setting_list($account_id, $by_name = TRUE, $service_account = arra
+  *   background - html color code for background
+  *   foreground - html color code for foreground
+  */
+-function gcal_colors_get($account_id, $by_name = TRUE, $service_account = array()) {
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++function gcal_colors_get($account_id, $by_name = TRUE) {
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+@@ -457,8 +416,7 @@ function gcal_colors_get($account_id, $by_name = TRUE, $service_account = array(
+  *   Event data in an array containing:
+  *  - Start - Event start DateTime  eg '2012-12-24 12:30:00'  - Required
+  *  - End - Event end DateTime      eg '2012-12-24 12:30:00'  - Required
+- *  - Timezone - Event timezone, defaults to the start and end timezone  -  Required
+- *  - TimezoneEnd  - Event timezone. Replaces the end timezone above if present.
++ *  - Timezone - Event timezone  - Required
+  *  - Creator - Array of creator details as
+  *              DisplayName - Name to be displayed as creator of the event
+  *              Email - Email of the event creator
+@@ -540,7 +498,7 @@ function gcal_colors_get($account_id, $by_name = TRUE, $service_account = array(
+  * @return boolean
+  *   FALSE, in the case of error.
+  */
+-function gcal_event_create($event, $calendar_id, $account_id, $by_name = TRUE, $service_account = array()) {
++function gcal_event_create($event, $calendar_id, $account_id, $by_name = TRUE) {
+   if (!is_array($event)) {
+     drupal_set_message(t("Please pass array of attributes to create function"));
+     return FALSE;
+@@ -553,7 +511,7 @@ function gcal_event_create($event, $calendar_id, $account_id, $by_name = TRUE, $
+     drupal_set_message(t("Set a valid Timezone"), 'error');
+     return FALSE;
+   }
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+@@ -568,8 +526,7 @@ function gcal_event_create($event, $calendar_id, $account_id, $by_name = TRUE, $
+   $event['Start']->setTimeZone($event['Timezone']);
+   $event['End'] = new Google_Service_Calendar_EventDateTime();
+   $event['End']->setDateTime($end);
+-  $timezone_end = !empty($event['TimezoneEnd']) ? $event['TimezoneEnd'] : $event['Timezone'];
+-  $event['End']->setTimeZone($timezone_end);
++  $event['End']->setTimeZone($event['Timezone']);
+   if (isset($event['OriginalStartTime'])) {
+     $timestamp = strtotime($event['OriginalStartTime']);
+     $event['OriginalStartTime'] = new Google_Service_Calendar_EventDateTime();
+@@ -669,7 +626,7 @@ function gcal_event_create($event, $calendar_id, $account_id, $by_name = TRUE, $
+  * @return boolean
+  *   FALSE, in the case of error.
+  */
+-function gcal_event_update($event, $calendar_id, $account_id, $by_name = TRUE, $service_account = array()) {
++function gcal_event_update($event, $calendar_id, $account_id, $by_name = TRUE) {
+   if (!is_array($event)) {
+     drupal_set_message(t("Please pass array of attributes to update function"));
+     return FALSE;
+@@ -678,7 +635,7 @@ function gcal_event_update($event, $calendar_id, $account_id, $by_name = TRUE, $
+     drupal_set_message(t("Set event id of the event"), 'error');
+     return FALSE;
+   }
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+@@ -686,7 +643,7 @@ function gcal_event_update($event, $calendar_id, $account_id, $by_name = TRUE, $
+     $start = $event['Start'];
+     $timestamp = strtotime($start);
+     $start = date('Y-m-d\TH:i:s', $timestamp);
+-    $event['Start'] = new Google_EventDateTime();
++    $event['Start'] = new Google_Service_Calendar_EventDateTime();
+     $event['Start']->setDateTime($start);
+     $event['Start']->setTimeZone($event['Timezone']);
+   }
+@@ -694,13 +651,13 @@ function gcal_event_update($event, $calendar_id, $account_id, $by_name = TRUE, $
+     $end = $event['End'];
+     $timestamp = strtotime($end);
+     $end = date('Y-m-d\TH:i:s', $timestamp);
+-    $event['End'] = new Google_EventDateTime();
++    $event['End'] = new Google_Service_Calendar_EventDateTime();
+     $event['End']->setDateTime($end);
+     $event['End']->setTimeZone($event['Timezone']);
+   }
+   if (isset($event['OriginalStartTime'])) {
+     $timestamp = strtotime($event['OriginalStartTime']);
+-    $event['OriginalStartTime'] = new Google_EventDateTime();
++    $event['OriginalStartTime'] = new Google_Service_Calendar_EventDateTime();
+     $event['OriginalStartTime']->setDateTime(date('Y-m-d\TH:i:s', $timestamp));
+     $event['OriginalStartTime']->setTimeZone($event['Timezone']);
+   }
+@@ -708,18 +665,18 @@ function gcal_event_update($event, $calendar_id, $account_id, $by_name = TRUE, $
+     $google_reminder = array();
+     foreach ($event['Reminders'] as $key => $reminder) {
+       if (isset($reminder['minutes'])) {
+-        $google_reminder[$key] = new Google_EventReminder();
++        $google_reminder[$key] = new Google_Service_Calendar_EventReminder();
+         $google_reminder[$key]->setMinutes($reminder['minutes']);
+         $google_reminder[$key]->setMethod(isset($reminder['method']) ? $reminder['method'] : 'email');
+       }
+     }
+-    $event['Reminders'] = new Google_EventReminders();
++    $event['Reminders'] = new Google_Service_Calendar_EventReminders();
+     $event['Reminders']->setOverrides($google_reminder);
+     $event['Reminders']->setUseDefault(FALSE);
+   }
+   if (isset($event['Creator'])) {
+     $creator = $event['Creator'];
+-    $event['Creator'] = new Google_EventCreator();
++    $event['Creator'] = new Google_Service_Calendar_EventCreator();
+     if (isset($creator['Creator']['DisplayName'])) {
+       $event['Creator']->setDisplayName($creator['DisplayName']);
+     }
+@@ -761,7 +718,7 @@ function gcal_event_update($event, $calendar_id, $account_id, $by_name = TRUE, $
+       }
+       else {
+         $attendee = array_intersect_key($attendee, $attributes);
+-        $event_attendee = new Google_EventAttendee();
++        $event_attendee = new Google_Service_Calendar_EventAttendee();
+         foreach ($attendee as $key => $val) {
+           $event_attendee->$attributes[$key]($val);
+         }
+@@ -792,8 +749,8 @@ function gcal_event_update($event, $calendar_id, $account_id, $by_name = TRUE, $
+  * @param string $account_id
+  *   Name or id of google_oauth2 account
+  */
+-function gcal_event_delete($event_id, $calendar_id, $account_id, $by_name = TRUE, $service_account = array()) {
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++function gcal_event_delete($event_id, $calendar_id, $account_id, $by_name = TRUE) {
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+@@ -817,8 +774,8 @@ function gcal_event_delete($event_id, $calendar_id, $account_id, $by_name = TRUE
+  *   Array of event details
+  *   All attributes of the event declared in gcal_event_attributes().
+  */
+-function gcal_event_get($calendar_id, $event_id, $account_id, $by_name = TRUE, $service_account = array()) {
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++function gcal_event_get($calendar_id, $event_id, $account_id, $by_name = TRUE) {
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+@@ -846,8 +803,8 @@ function gcal_event_get($calendar_id, $event_id, $account_id, $by_name = TRUE, $
+  *   Array of event details
+  *   Event array with few basic attributes are returned
+  */
+-function gcal_event_move($source_calendar_id, $event_id, $dest_calendar_id, $account_id, $by_name = TRUE, $service_account = array()) {
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++function gcal_event_move($source_calendar_id, $event_id, $dest_calendar_id, $account_id, $by_name = TRUE) {
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+@@ -872,8 +829,8 @@ function gcal_event_move($source_calendar_id, $event_id, $dest_calendar_id, $acc
+  *   Array of event details
+  *   Event array with few basic attributes are returned
+  */
+-function gcal_event_quickadd($calendar_id, $text, $account_id, $by_name = TRUE, $service_account = array()) {
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++function gcal_event_quickadd($calendar_id, $text, $account_id, $by_name = TRUE) {
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+@@ -904,7 +861,7 @@ function gcal_event_quickadd($calendar_id, $text, $account_id, $by_name = TRUE,
+  *   Array of event details
+  *   Event array with few basic attributes are returned
+  */
+-function gcal_freebusy($params, $account_id, $by_name = TRUE, $service_account = array()) {
++function gcal_freebusy($params, $account_id, $by_name = TRUE) {
+   if (!is_array($params)) {
+     drupal_set_message(t("Please pass array of params"));
+     return FALSE;
+@@ -917,7 +874,7 @@ function gcal_freebusy($params, $account_id, $by_name = TRUE, $service_account =
+     drupal_set_message(t("Set a valid Timezone"), 'error');
+     return FALSE;
+   }
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+@@ -941,13 +898,13 @@ function gcal_freebusy($params, $account_id, $by_name = TRUE, $service_account =
+   $params['TimeMin'] = $start;
+   $params['TimeMax'] = $end;
+   foreach ($params['Items'] as $key => $val) {
+-    $params['Items'][$key] = new Google_FreeBusyRequestItem();
++    $params['Items'][$key] = new Google_Service_Calendar_FreeBusyRequestItem();
+     $params['Items'][$key]->setId($val);
+   }
+   $attributes = gcal_freebusy_attributes();
+   // Clean array before passing it if user has passed any unwanted indexes.
+   $params = array_intersect_key($params, $attributes);
+-  $freebusy = new Google_FreeBusyRequest();
++  $freebusy = new Google_Service_Calendar_FreeBusyRequest();
+   foreach ($params as $attr => $val) {
+     $freebusy->$attributes[$attr]($val);
+   }
+@@ -992,8 +949,8 @@ function gcal_freebusy($params, $account_id, $by_name = TRUE, $service_account =
+  * @return array
+  *   Array of acl details
+  */
+-function gcal_acl_create($acl, $calendar_id, $account_id, $by_name = TRUE, $service_account = array()) {
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++function gcal_acl_create($acl, $calendar_id, $account_id, $by_name = TRUE) {
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+@@ -1005,7 +962,7 @@ function gcal_acl_create($acl, $calendar_id, $account_id, $by_name = TRUE, $serv
+     drupal_set_message(t("Invalid scopeType passed to the acl create function"), 'error');
+     return FALSE;
+   }
+-  $scope = new Google_AclRuleScope();
++  $scope = new Google_Service_Calendar_AclRuleScope();
+   $scope->setType($acl['scopeType']);
+   if ($acl['scopeType'] != 'default' && !isset($acl['scopeValue'])) {
+     drupal_set_message(t("No scopeValue passed to the acl create function"), 'error');
+@@ -1017,7 +974,7 @@ function gcal_acl_create($acl, $calendar_id, $account_id, $by_name = TRUE, $serv
+   else {
+     $scope->setValue("");
+   }
+-  $rule = new Google_AclRule();
++  $rule = new Google_Service_Calendar_AclRule();
+   $rule->setScope($scope);
+   if (isset($acl['role'])) {
+     if (!in_array($acl['role'],
+@@ -1043,8 +1000,8 @@ function gcal_acl_create($acl, $calendar_id, $account_id, $by_name = TRUE, $serv
+  * @param string $account_id
+  *   Name or id of google_oauth2 account
+  */
+-function gcal_acl_delete($calendar_id, $rule_id, $account_id, $by_name = TRUE, $service_account = array()) {
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++function gcal_acl_delete($calendar_id, $rule_id, $account_id, $by_name = TRUE) {
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+@@ -1068,8 +1025,8 @@ function gcal_acl_delete($calendar_id, $rule_id, $account_id, $by_name = TRUE, $
+  *   A calendar array having kind, etag, id, summary(title),
+  *                          timeZone of the calendar.
+  */
+-function gcal_acl_get($calendar_id, $rule_id, $account_id, $by_name = TRUE, $service_account = array()) {
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++function gcal_acl_get($calendar_id, $rule_id, $account_id, $by_name = TRUE) {
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+@@ -1123,7 +1080,7 @@ function gcal_acl_get($calendar_id, $rule_id, $account_id, $by_name = TRUE, $ser
+  *   kind - Kind (usually calendar)
+  *   summary - Summary set for the calendar
+  */
+-function gcal_calendarList_create($calendarlist, $account_id, $by_name = TRUE, $service_account = array()) {
++function gcal_calendarList_create($calendarlist, $account_id, $by_name = TRUE) {
+   if (!is_array($calendarlist)) {
+     drupal_set_message(t("Please pass array of attributes to update function"));
+     return FALSE;
+@@ -1132,16 +1089,16 @@ function gcal_calendarList_create($calendarlist, $account_id, $by_name = TRUE, $
+     drupal_set_message(t("Please set the id for the calendar"), 'error');
+     return FALSE;
+   }
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+-  $cal = new Google_CalendarListEntry();
++  $cal = new Google_Service_Calendar_CalendarListEntry();
+   if (isset($calendarlist['DefaultReminders'])) {
+     $google_reminder = array();
+     foreach ($calendarlist['DefaultReminders'] as $key => $reminder) {
+       if (isset($reminder['minutes'])) {
+-        $google_reminder[$key] = new Google_EventReminder();
++        $google_reminder[$key] = new Google_Service_Calendar_EventReminder();
+         $google_reminder[$key]->setMinutes($reminder['minutes']);
+         $google_reminder[$key]->setMethod(isset($reminder['method']) ? $reminder['method'] : 'email');
+       }
+@@ -1196,7 +1153,7 @@ function gcal_calendarList_create($calendarlist, $account_id, $by_name = TRUE, $
+  * @return array
+  *   Array of calendarlist attributes or FALSE if failed
+  */
+-function gcal_calendarlist_update($calendarlist, $account_id, $by_name = TRUE, $service_account = array()) {
++function gcal_calendarlist_update($calendarlist, $account_id, $by_name = TRUE) {
+   if (!is_array($calendarlist)) {
+     drupal_set_message(t("Please pass array of attributes to update function"));
+     return FALSE;
+@@ -1205,7 +1162,7 @@ function gcal_calendarlist_update($calendarlist, $account_id, $by_name = TRUE, $
+     drupal_set_message(t("Please set the id for the calendar"), 'error');
+     return FALSE;
+   }
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+@@ -1219,7 +1176,7 @@ function gcal_calendarlist_update($calendarlist, $account_id, $by_name = TRUE, $
+     $reminders = $cal->getDefaultReminders();
+     foreach ($calendarlist['DefaultReminders'] as $key => $reminder) {
+       if (isset($reminder['minutes'])) {
+-        $google_reminder = new Google_EventReminder();
++        $google_reminder = new Google_Service_Calendar_EventReminder();
+         $google_reminder->setMinutes($reminder['minutes']);
+         $google_reminder->setMethod(isset($reminder['method']) ? $reminder['method'] : 'email');
+         array_push($reminders, $google_reminder);
+@@ -1247,8 +1204,8 @@ function gcal_calendarlist_update($calendarlist, $account_id, $by_name = TRUE, $
+  * @param string $account_id
+  *   Name or id of google_oauth2 account
+  */
+-function gcal_calendarlist_delete($calendarlist_id, $account_id, $by_name = TRUE, $service_account = array()) {
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++function gcal_calendarlist_delete($calendarlist_id, $account_id, $by_name = TRUE) {
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
+@@ -1269,8 +1226,8 @@ function gcal_calendarlist_delete($calendarlist_id, $account_id, $by_name = TRUE
+  *   A calendar array having kind, etag, id, summary(title),
+  *                          timeZone etc attributes of the calendar.
+  */
+-function gcal_calendarlist_get($calendar_id, $account_id, $by_name = TRUE, $service_account = array()) {
+-  $gcs = gcal_calendar_object($account_id, $by_name, $service_account);
++function gcal_calendarlist_get($calendar_id, $account_id, $by_name = TRUE) {
++  $gcs = gcal_calendar_object($account_id, $by_name);
+   if (!$gcs) {
+     return FALSE;
+   }
